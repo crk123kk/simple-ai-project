@@ -1,0 +1,101 @@
+---
+description: TypeScript 红线
+globs: "**/*.{ts,tsx,vue}"
+alwaysApply: false
+---
+
+# TypeScript 红线
+
+## 禁止 any
+
+- 禁止使用 `any`，使用 `unknown` + 类型收窄
+- 任意对象用 `Record<string, unknown>`
+- 任意数组用 `unknown[]`
+- 函数参数缺省类型时用 `unknown`，禁止隐式 `any`
+
+## type vs interface
+
+| 场景                         | 选择        |
+| ---------------------------- | ----------- |
+| 对象结构（Props、API 响应）  | `interface` |
+| 联合类型、函数类型、工具类型 | `type`      |
+
+- `interface` 使用 PascalCase，不加 `I` 前缀（如 `User`，不是 `IUser`）
+- `type` 别名使用 PascalCase（如 `Status = 'active' | 'inactive'`）
+
+## 类型断言
+
+- 禁止滥用 `as`，优先类型守卫或 `satisfies`
+- 禁止非空断言 `!`，使用可选链 `?.` + 默认值 `??`
+- 需要断言时优先用 `satisfies` 保留推断类型：
+
+```ts
+// bad — 丢失字面量推断
+const config = { port: 3000 } as Config
+
+// good — 保留字面量类型同时校验结构
+const config = { port: 3000 } satisfies Config
+```
+
+## 枚举
+
+- 禁止数字枚举，使用字符串枚举或字面量联合类型
+- 优先字面量联合类型，枚举仅在需要反向映射或运行时对象时使用：
+
+```ts
+// preferred
+type Status = 'active' | 'inactive'
+
+// only when runtime object needed
+const Status = { Active: 'active', Inactive: 'inactive' } as const
+type Status = (typeof Status)[keyof typeof Status]
+```
+
+## import type
+
+- 纯类型导入必须使用 `import type`，与值导入分离：
+
+```ts
+// bad
+import { User, formatDate } from './utils'
+
+// good
+import type { User } from './utils'
+import { formatDate } from './utils'
+```
+
+- 内联写法也可：`import { type User, formatDate } from './utils'`
+
+## 不可变优先
+
+- 对外暴露的数据结构优先标记 `readonly`
+- 常量声明使用 `as const`
+
+```ts
+interface State {
+  readonly items: readonly string[]
+}
+
+const ROLES = ['admin', 'user'] as const
+```
+
+## 判别联合
+
+- 多状态建模使用判别联合（discriminated union），禁止用可选字段模拟状态：
+
+```ts
+// bad
+interface Request { data?: Data; error?: Error; loading?: boolean }
+
+// good
+type Request =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: Data }
+  | { status: 'error'; error: Error }
+```
+
+## 函数签名
+
+- 导出函数必须显式声明返回类型
+- 回调参数不超过 3 个，超过则传对象

@@ -1,0 +1,83 @@
+---
+description: Vue 组件红线（SFC）
+globs: "**/*.vue"
+alwaysApply: false
+---
+
+# Vue 组件红线
+
+## 基础
+
+- 使用 `<script setup lang="ts">`；类型约定与项目 TypeScript 规则一致
+- 优先组合式 API；避免在 SFC 中混用已废弃的 Options 写法做新功能
+
+## 结构
+
+- 单文件 ≤400 行，超出必须拆分子组件
+- 组件目录提供 `index.ts`（或约定的单文件入口）统一导出，避免深层相对路径散落引用
+- 禁止在 `main.ts` 与 `App.vue` 中堆业务实现（启动、根布局除外）
+- SFC 分段顺序：`<script setup>` → `<template>` → `<style scoped>`（无样式可省略 `<style>`）
+
+## 命名
+
+- 组件文件名 PascalCase、多词命名：`TodoList.vue`，避免过度泛化如单独 `List.vue`
+- 基础组件使用 `Base` / `App` 前缀：`BaseButton.vue`、`AppIcon.vue`
+- 单例级布局或壳组件可使用 `The` 前缀：`TheHeader.vue`
+- 与父组件强绑定的子组件以父名为前缀：`TodoListItem.vue`
+- 事件处理函数使用 `handle` 前缀：`handleSubmit`、`handleClick`
+- 组合式函数使用 `use` 前缀：`useFetch`；细则见同目录 `vue-composables.mdc`（若已配置）
+
+## Props / Emits
+
+- Props 用 `interface` 描述形状；需要默认值时用 `withDefaults(defineProps<Props>(), { ... })`，无默认值时直接使用 `defineProps<Props>()`
+- 对象 / 数组默认值必须使用工厂函数，避免共享引用
+
+```ts
+interface Props {
+  /** 待办事项列表 */
+  items: Todo[]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  items: () => [],
+})
+```
+
+- Emits 使用 `defineEmits<{ ... }>()` 显式声明事件与 payload 类型
+- 对非自解释的 prop（单位、枚举含义、与后端字段映射等）必须写 JSDoc；显而易见的可省略
+
+## 通信方式
+
+| 场景     | 方式                                                                 |
+| -------- | -------------------------------------------------------------------- |
+| 双向绑定 | `defineModel`（Vue 3.4+，优先）或 `v-model` / 显式 prop + emit       |
+| 父子通信 | `props` + `emit`                                                     |
+| 跨层级   | `provide` / `inject` 配合 `InjectionKey<T>`；≥3 层或跨特性域再用 Pinia |
+| 全局状态 | Pinia                                                                |
+
+- `provide` / `inject` 必须使用 `InjectionKey` 保证类型安全
+- `provide` 出去的响应式对象应对下游视为只读：优先 `readonly()` 包装或约定不就地 mutate
+
+```ts
+// keys.ts
+export const themeKey: InjectionKey<Ref<string>> = Symbol('theme')
+
+// provider
+provide(themeKey, readonly(theme))
+
+// consumer
+const theme = inject(themeKey, ref('light'))
+```
+
+## 模板 ref
+
+- 禁止用 ref 读写子组件**未作为稳定契约暴露**的内部状态（不把 ref 当「后门」）
+- 允许通过模板 ref 调用子组件用 `defineExpose` 明确公开的 API（如 `focus`、`reset`）
+
+## 禁止
+
+- 禁止 EventBus / mitt 作为全局耦合通道
+- 禁止 `$parent` 链式访问
+- 禁止在应用代码中依赖 `getCurrentInstance()`（库 / 插件场景除外，需在注释中说明）
+- 禁止为单个组件自动生成 README 类文档（除非仓库明确要求）
+- 禁止在同一元素上同时混用 `v-if` 与 `v-for`（用 `template` 分包或先过滤数据）

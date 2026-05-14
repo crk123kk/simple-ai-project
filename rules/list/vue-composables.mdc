@@ -1,0 +1,80 @@
+---
+description: Vue Composables 红线（组合式函数）
+globs:
+  - "**/composables/**/*.ts"
+  - "**/use*.ts"
+alwaysApply: false
+---
+
+# Vue Composables 红线
+
+## 命名与导出
+
+- 函数名 `use` 前缀；单文件默认导出该 composable，或具名导出与文件名一致的 `useXxx`。
+
+## 入参
+
+- 对外参数优先 **`MaybeRefOrGetter<T>`**；在 `watch` / `computed` / 方法内用 **`toValue()`** 读取，避免只收裸 `Ref` 或丢失对 getter 的追踪。
+
+```ts
+watch(
+  () => toValue(url),
+  (u) => {
+    void fetch(u)
+  },
+  { immediate: true },
+)
+```
+
+## 返回值与内部状态
+
+- 对外返回**普通对象**，字段用 `ref` / `shallowRef` / `computed` / 方法；内部状态同样优先 `ref` / `shallowRef`，与返回值风格一致。
+- 避免让调用方**解构** `reactive(...)` 字段；若聚合状态不得不用 `reactive`，优先 `readonly(...)` 或不在类型上鼓励解构。
+
+## 异步请求（若涉及 `fetch` / XHR）
+
+- 暴露 **`data` / `error` / `isFetching`（或 `pending`）** 等等价状态；再次请求前重置，避免短暂展示过期数据；用 **`AbortController`** 可取消，并在 `onUnmounted` / `onBeforeUnmount` 里 `abort`。
+- DOM / `window` 仅在 **`onMounted`** 或项目约定的 **SSR 守卫**（如 `import.meta.env.SSR`、`typeof window`）之后访问。
+
+## 副作用清理
+
+- 监听、定时器、`addEventListener` 等必须对称清理；多个 `watch` / `watchEffect` 可用 **`effectScope`**，`onUnmounted(() => scope.stop())` 一次释放。
+
+## 组合与共享
+
+- 可在 composable 内调用其他 composable；返回值可作为下游输入。
+- **禁止**用**模块级** `ref`/`reactive` 冒充全局 store（SSR、可测试性、依赖方向差）；跨组件共享用 **Pinia** 或项目既定方案。
+
+## 调用时机
+
+- 在 **`<script setup>` / `setup()` 的同步阶段**创建（含该阶段内、首个 `await` 之前的调用栈）。
+- **禁止**在 `setTimeout`、微任务 / 宏任务回调、事件处理器里**首次**执行 `useXxx()`；调用已返回的方法不在此限。
+
+## 类型
+
+- 与 **`typescript.mdc`** 一致：导出 composable **显式声明返回类型**；返回对象形状可先 **`interface`** 再引用。
+
+```ts
+export interface UseCounterReturn {
+  count: Readonly<Ref<number>>
+  increment: () => void
+}
+
+export function useCounter(initial = 0): UseCounterReturn {
+  const count = ref(initial)
+  const increment = () => {
+    count.value++
+  }
+  return { count, increment }
+}
+```
+
+## 反模式速查
+
+| 反模式           | 替代做法                          |
+| ---------------- | --------------------------------- |
+| 返回/解构丢响应  | 对象里包 `ref` / `computed`       |
+| setup 外首次调用 | 仅在 setup 同步栈创建 composable  |
+| 模块级变量当 store | Pinia / `provide`+`InjectionKey` |
+| 入参不归一化     | `MaybeRefOrGetter` + `toValue`    |
+| 重入请求不重置   | 发请求前 reset；`AbortController` |
