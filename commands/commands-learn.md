@@ -28,3 +28,32 @@
     commit: 是将代码提交到版本控制系统中，记录代码的变更历史和版本信息等方面。（提交代码）
 
     changelog: 记录变更历史，生成周报
+
+## 理解
+
+    未来真正值钱的可能不是代码，而是围绕代码的 workflow 和 process，是 AI 生产流程，这也是很多“一人公司”开始出现超高效率的核心原因。
+
+## command 工程化
+
+    command 的本质是 prompt engineering 的标准化。
+
+    真正顶级玩家在做什么, 不是“收集 command”，而是： 建立自己的 AI Engineering System
+
+    例如：
+        需求 -> /prd -> 任务 -> /task -> 架构设计 -> /architecture -> 实现 -> /implement -> 代码审查 -> /review -> 测试 -> /test -> 发布 -> /ship
+
+        这已经是：AI 软件工厂。
+
+    现在社区里比较出名的 command 方向
+
+        你可以重点研究：
+
+            方向 核心
+            Cursor Rules 项目规范
+            Claude Code Commands 工作流
+            OpenCode Skills Agent能力
+            OpenClaw Skills 自动化能力
+            RooCode Modes 多角色AI
+            Cline Tasks 自动执行
+            Devin Flow AI工程师
+            Aider Architect Mode 架构模式
