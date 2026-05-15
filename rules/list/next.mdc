@@ -1,0 +1,158 @@
+---
+description: Next.js / React（App Router）红线
+globs:
+  - "**/*.{ts,tsx,js,jsx}"
+  - "**/next.config.*"
+alwaysApply: false
+---
+
+# Next.js / React（App Router）
+
+适用于 **Next.js 14–15**、**React 18–19**，**App Router**；与 `typescript.mdc`、`style.mdc` 一并遵守。新功能不扩展 **Pages Router**。
+
+## 推荐目录（`src/` 可选）
+
+```
+src/
+├── app/                    # 路由层：仅放 layout / page / loading / error / not-found / template
+│   └── (dashboard)/        # 路由组（不影响 URL）
+│       ├── layout.tsx
+│       ├── page.tsx
+│       └── settings/
+│           └── page.tsx
+├── components/             # 共享 UI 组件
+│   ├── ui/                 # 基础原语（Button、Input、Dialog …）
+│   └── features/           # 按业务域聚合的复合组件
+├── hooks/                  # 共享自定义 Hooks
+├── lib/                    # 纯逻辑 / 工具函数 / 第三方封装
+├── services/               # API 调用层（fetch 封装、Server Actions）
+├── types/                  # 全局类型定义
+└── constants/              # 常量
+```
+
+- **`app/`**：只放**路由约定文件** + 该路由段**私有**模块（同目录 `components/`、`actions.ts` 等 colocation）；**共享** UI / 工具放 `components/`、`lib/`、`services/`
+- **Route Group** `(name)/` 只做布局分组；**平行路由 `@`、拦截路由 `(.)`** 确有需求再用
+- **`layout.tsx` 保持轻**：具体业务数据请求放 **`page.tsx`**，避免根 layout 拉重数据
+
+## 路由文件职责
+
+| 文件 | 用途 |
+|------|------|
+| `page.tsx` | 页面 UI 与数据编排 |
+| `layout.tsx` | 嵌套布局 |
+| `loading.tsx` | 路由级 Suspense / 骨架，不写业务逻辑 |
+| `error.tsx` | 错误边界（须 `'use client'`） |
+| `not-found.tsx` | 404 |
+| `route.ts` | HTTP Route Handler |
+
+- 动态段 `[id]`、catch-all `[...slug]`、optional `[[...slug]]` 命名与类型一致
+- 站内导航用 **`<Link>`**；编程式导航 **`useRouter()`**（客户端）。路由间状态不靠模块级全局变量，优先 **URL / Server 取数**
+
+## Server / Client 边界
+
+- **默认 Server Component**；仅在需要 **状态与事件**、**仅客户端库**、**浏览器 API**（`window` / `document` / `localStorage`）时加 **`'use client'`**，并**下推到叶子**
+- Server → Client 的 props 须**可序列化**；禁传函数、类实例。不可序列化数据用 **Server Actions** / **`server-only`** + 约定序列化
+- Server Component 内禁止 **hooks**（除 async 组件本身）、**浏览器 API**、**事件处理**
+- **禁止**同一文件混 **`'use server'`** 与 **`'use client'`**；路由文件 **`default export`** 仅约定页面/布局，不额外导出多个组件
+
+```tsx
+// 动态路由：Next 15+ — params / searchParams 为 Promise，须 await
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const post = await getPost(slug)
+  return <article>{post.content}</article>
+}
+```
+
+- Client 从 props 收到上述 Promise 时用 React **`use(params)`** / **`use(searchParams)`**（React 19），勿当同步对象
+- **`generateMetadata`** 里依赖路由参数时同样 **`await params`**
+
+## 数据获取与缓存
+
+- Server Component：**直接 `async/await`** 拉数；**禁止**在 SC 里用 **`useEffect` 请求**
+- 同路由多请求 **`Promise.all`**；只取当前路由需要的数据
+- 客户端请求用 **SWR / TanStack Query**，封装在 **`services/`**，不在组件内散落 `fetch`
+- SEO 敏感列表：**首屏 Server Component**；搜索/筛选可叠 Client 子树
+- **`fetch` 须显式缓存策略**（`cache`、`next: { revalidate }`、`tags` 等）；要按请求新鲜数据用 **`cache: 'no-store'`** 或等价
+
+## Server Actions
+
+- **`'use server'`**；建议独立文件（如 **`services/actions/`**），入参/返回值可序列化
+- **校验**：zod / valibot 等，**禁止**盲信客户端；错误 **try/catch** 后返回结构化结果，勿把内部异常直抛给前端
+- 表单配合 **`useActionState`（React 19）** 或 **`useFormState`（React 18）** 做渐进增强
+
+## 组件约定
+
+- 文件名 **PascalCase**；**具名导出**；**`default export` 仅** `page` / `layout` 等约定文件
+- 单文件 **≤300 行**，超出拆分。内部顺序：**hooks → 派生 → 事件 → 渲染**
+- Props：**`interface`**、回调 **`onXxx`**；事件处理 **`handleXxx`**；纯类型 **`import type`**（见 `typescript.mdc`）
+- 列表稳定 **`key`**；非静态列表**不用 index 作 key**
+
+## Hooks
+
+- 自定义 **`use` 前缀**，放 `hooks/` 或就近；**超过 2 个入参用对象参数**
+- 副作用需**清理**（如 `AbortController`）
+
+## 状态管理（速查）
+
+| 场景 | 方案 |
+|------|------|
+| 局部 | `useState` / `useReducer` |
+| 跨组件 | 小范围 Context；复杂用 Zustand / Jotai |
+| 服务端驱动 UI | SWR / TanStack Query（封装在 `services/`） |
+| 表单 | RHF / Conform + zod |
+| URL | `nuqs` / `useSearchParams` |
+
+- Context **按域拆分**；Provider **就近**包裹；value 避免每次 render **内联新对象/函数**（必要时 `useMemo` / `useCallback`）
+
+## 样式
+
+- 优先 **Tailwind**；类过多时抽组件或 `@apply`；条件类用 **`clsx` / `cn`（tailwind-merge）**
+- 主题令牌与 **`style.mdc`** 一致
+
+## Metadata / 图片 / 脚本
+
+- SEO：**`metadata` / `generateMetadata`**；勿在 Client 组件里 export metadata
+- 图片：**`next/image`**，提供 **`width`/`height`** 或 **`fill` + `sizes`**；外域图在 **`next.config` `remotePatterns`**
+- 第三方脚本：**`next/script`**，选对 **`strategy`**
+
+## Loading / 错误
+
+- 路由级 **`loading.tsx`**；细粒度用 **`<Suspense>`**
+- **`error.tsx`**（Client）、**`not-found.tsx`**、根级 **`global-error.tsx`**；业务「未找到」用 **`notFound()`**
+
+## Route Handler（`route.ts`）
+
+- 按 **HTTP 方法**分函数导出；校验 **method**、**content-type**
+- 使用 **`NextRequest` / `NextResponse`**；状态码与 JSON 形状明确，异常在服务端记录
+
+## 中间件
+
+- **`middleware.ts`** 放根或 `src/`：**轻量**（鉴权、重定向、header），**`matcher`** 限定路径；不做重数据请求
+
+## 环境变量
+
+- 暴露给浏览器：**`NEXT_PUBLIC_`**；密钥永不进客户端 bundle
+- 推荐 **`lib/env.ts`** 用 zod **集中 parse**，避免散落 **`process.env.X`**
+
+## 性能与安全
+
+- 大包：**`next/dynamic`** / `React.lazy`；全局 layout **少引客户端重依赖**
+- Client 子组件避免无谓 **内联对象/函数** props；**`useMemo` / `useCallback`** 不为「玄学优化」滥加
+- **XSS**：可信转义或消毒；**`dangerouslySetInnerHTML`** 慎用。Cookie 会话下变更注意 **CSRF** 与框架推荐做法
+
+## 测试与交付
+
+- 纯逻辑优先单测；关键 **Server Actions / Route Handler** 配合集成或 E2E（按项目栈）
+- 新路由同步考虑 **loading / error / metadata**，避免白屏与 SEO 缺失
+
+## 禁止清单
+
+- 用 **`useEffect` 当主要数据获取`**（SC 用 async；客户端用 SWR/Query）
+- SC 里用 hooks / 浏览器 API / DOM 事件
+- Client 子组件 **回调** 去驱动 Server 父组件（边界反了）
+- **`window` / `document` 模块顶层**访问
+- **`layout.tsx` 拉具体业务数据**（应放 `page.tsx`）
+- **动态 `params` / `searchParams` 不 await**（Next 15+ 为 Promise）
+- **`fetch` 无明确缓存策略**
+- 路由文件 **多个 default 或乱导出组件**
