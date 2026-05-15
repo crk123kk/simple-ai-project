@@ -11,9 +11,7 @@
     feat: 是完成一个新的功能或者特性。
 
 
-    ---- workflow ------ Plan -> PRD -> Tasks -> Architecture -> Implement -----
-
-    plan: 是制定一个计划或者方案，可能是针对某个功能的实现或者项目的规划。
+    ---- workflow ------ PRD -> Tasks -> Architecture -> Implement -----
 
     prd: 是编写产品需求文档，明确功能需求、用户需求、业务需求等方面。（明确需求）
 
